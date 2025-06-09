@@ -1,7 +1,7 @@
 package com.app.sololevelinghabittracker.ui.screens
 
-import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,23 +15,29 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.clickable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.app.sololevelinghabittracker.data.local.entity.Habit
 import com.app.sololevelinghabittracker.viewmodel.HabitsViewModel
 import com.app.sololevelinghabittracker.datastore.AppPreferencesManager
 import java.time.LocalDate
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HabitsScreen(
     viewModel: HabitsViewModel,
-    contentPadding: PaddingValues
+    contentPadding: PaddingValues,
+    onMatrixClick: () -> Unit
 ) {
     val habitSections by viewModel.habits.collectAsStateWithLifecycle()
-    val showFailureDialog by viewModel.showFailureDialog.collectAsState()
     val context = LocalContext.current
     val prefsManager = remember { AppPreferencesManager(context) }
+    val scope = rememberCoroutineScope()
+
+    var showJournalDialog by remember { mutableStateOf(false) }
+    var showMoodDialog by remember { mutableStateOf(false) }
+    var journalText by remember { mutableStateOf("") }
+    var selectedMood by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         val lastUpdated = prefsManager.getFailReasonLastUpdatedDate()
@@ -39,6 +45,8 @@ fun HabitsScreen(
         if (lastUpdated != today) {
             prefsManager.resetFailReasons()
         }
+        journalText = prefsManager.getJournalEntry(today)
+        selectedMood = prefsManager.getMoodEntry(today)
     }
 
     Scaffold(
@@ -46,6 +54,33 @@ fun HabitsScreen(
             TopAppBar(
                 title = { Text("Today’s Habits", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
             )
+        },
+        bottomBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Button(
+                    onClick = { showJournalDialog = true },
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("📝 Journal")
+                }
+                Button(
+                    onClick = { showMoodDialog = true },
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("😊 Mood")
+                }
+                Button(
+                    onClick = onMatrixClick,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("📋 Matrix")
+                }
+            }
         }
     ) { padding ->
         if (habitSections.isEmpty()) {
@@ -85,92 +120,72 @@ fun HabitsScreen(
         }
     }
 
-    if (showFailureDialog != null) {
-        FailureReasonDialog(
-            onDismiss = { viewModel.cancelFailureReason() },
-            onSave = { reason ->
-                viewModel.saveFailureReason(reason)
-                Toast.makeText(context, "Failure reason saved!", Toast.LENGTH_SHORT).show()
+    if (showJournalDialog) {
+        AlertDialog(
+            onDismissRequest = { showJournalDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        val today = LocalDate.now().toString()
+                        prefsManager.saveJournalEntry(today, journalText)
+                        showJournalDialog = false
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showJournalDialog = false }) { Text("Cancel") }
+            },
+            title = { Text("Journal Entry") },
+            text = {
+                TextField(
+                    value = journalText,
+                    onValueChange = { journalText = it },
+                    placeholder = { Text("Write your thoughts...") }
+                )
             }
         )
     }
-}
 
-@Composable
-fun FailureReasonDialog(
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit
-) {
-    var selectedReason by remember { mutableStateOf("Felt Lazy") }
-    var extraNote by remember { mutableStateOf("") }
-    val reasons = listOf("Felt Lazy", "No Time", "Forgot", "Emergency", "Health Issue", "Unexpected Work", "Others")
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Why did you miss this habit?") },
-        text = {
-            Column {
-                DropdownMenuBox(
-                    items = reasons,
-                    selectedItem = selectedReason,
-                    onItemSelected = { selectedReason = it }
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = extraNote,
-                    onValueChange = { extraNote = it },
-                    label = { Text("Extra Note (Optional)") }
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val fullReason = "$selectedReason${if (extraNote.isNotBlank()) " - $extraNote" else ""}"
-                onSave(fullReason)
-            }) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
-}
-
-@Composable
-fun DropdownMenuBox(
-    items: List<String>,
-    selectedItem: String,
-    onItemSelected: (String) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box {
-        OutlinedTextField(
-            value = selectedItem,
-            onValueChange = {},
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Select Reason") },
-            readOnly = true
-        )
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            items.forEach { reason ->
-                DropdownMenuItem(
-                    text = { Text(reason) },
-                    onClick = {
-                        onItemSelected(reason)
-                        expanded = false
+    if (showMoodDialog) {
+        AlertDialog(
+            onDismissRequest = { showMoodDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        val today = LocalDate.now().toString()
+                        prefsManager.saveMoodEntry(today, selectedMood)
+                        showMoodDialog = false
                     }
-                )
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMoodDialog = false }) { Text("Cancel") }
+            },
+            title = { Text("How do you feel today?") },
+            text = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    (1..5).forEach { mood ->
+                        Text(
+                            text = when (mood) {
+                                1 -> "😞"
+                                2 -> "😐"
+                                3 -> "🙂"
+                                4 -> "😃"
+                                5 -> "🤩"
+                                else -> ""
+                            },
+                            fontSize = 28.sp,
+                            modifier = Modifier
+                                .padding(4.dp)
+                                .clickable { selectedMood = mood }
+                        )
+                    }
+                }
             }
-        }
-        Spacer(modifier = Modifier
-            .matchParentSize()
-            .background(Color.Transparent)
-            .clickable { expanded = true })
+        )
     }
 }
 @Composable

@@ -19,14 +19,13 @@ import com.app.sololevelinghabittracker.viewmodel.HabitsViewModel
 import com.app.sololevelinghabittracker.viewmodel.HabitsViewModelFactory
 import com.app.sololevelinghabittracker.viewmodel.QuestViewModel
 import com.app.sololevelinghabittracker.viewmodel.QuestViewModelFactory
-import com.app.sololevelinghabittracker.viewmodel.ShadowFocusViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val db = HabitDatabase.getDatabase(applicationContext)
-        val appPreferencesManager = AppPreferencesManager(applicationContext) // Fixed lowercase warning
+        val appPreferencesManager = AppPreferencesManager(applicationContext) // ✅ Correct lowercase
 
         val habitRepository = HabitRepository(db.habitDao())
         val questRepository = QuestRepository(db.questDao())
@@ -36,9 +35,6 @@ class MainActivity : ComponentActivity() {
 
         val habitsViewModel: HabitsViewModel by viewModels { habitsFactory }
         val questViewModel: QuestViewModel by viewModels { questFactory }
-
-        val AppPreferencesManager = AppPreferencesManager(applicationContext)
-
 
         setContent {
             SoloLevelingHabitTrackerTheme {
@@ -55,7 +51,7 @@ class MainActivity : ComponentActivity() {
                         habitsViewModel = habitsViewModel,
                         questViewModel = questViewModel,
                         paddingValues = innerPadding,
-                        AppPreferencesManager = AppPreferencesManager
+                        appPreferencesManager = appPreferencesManager // ✅ fixed lowercase usage here also
                     )
                 }
             }
