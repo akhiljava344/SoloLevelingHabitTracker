@@ -1,6 +1,7 @@
 package com.app.sololevelinghabittracker.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,25 +19,68 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.app.sololevelinghabittracker.data.local.entity.Habit
 import com.app.sololevelinghabittracker.viewmodel.HabitsViewModel
 import com.app.sololevelinghabittracker.datastore.AppPreferencesManager
-import android.widget.Toast
 import java.time.LocalDate
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HabitsScreen(
     viewModel: HabitsViewModel,
-    contentPadding: PaddingValues
+    contentPadding: PaddingValues,
+    onMatrixClick: () -> Unit
 ) {
     val habitSections by viewModel.habits.collectAsStateWithLifecycle()
-    val showDialogHabit by viewModel.showFailReasonDialog.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var failReasonText by remember { mutableStateOf("") }
+    val prefsManager = remember { AppPreferencesManager(context) }
+    val scope = rememberCoroutineScope()
+
+    var showJournalDialog by remember { mutableStateOf(false) }
+    var showMoodDialog by remember { mutableStateOf(false) }
+    var journalText by remember { mutableStateOf("") }
+    var selectedMood by remember { mutableStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        val lastUpdated = prefsManager.getFailReasonLastUpdatedDate()
+        val today = LocalDate.now().toString()
+        if (lastUpdated != today) {
+            prefsManager.resetFailReasons()
+        }
+        journalText = prefsManager.getJournalEntry(today)
+        selectedMood = prefsManager.getMoodEntry(today)
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Today’s Habits", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
             )
+        },
+        bottomBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Button(
+                    onClick = { showJournalDialog = true },
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("📝 Journal")
+                }
+                Button(
+                    onClick = { showMoodDialog = true },
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("😊 Mood")
+                }
+                Button(
+                    onClick = onMatrixClick,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("📋 Matrix")
+                }
+            }
         }
     ) { padding ->
         if (habitSections.isEmpty()) {
@@ -74,42 +118,76 @@ fun HabitsScreen(
                 }
             }
         }
+    }
 
-        // Failure Reason Dialog
-        if (showDialogHabit != null) {
-            AlertDialog(
-                onDismissRequest = { viewModel.clearFailReasonDialog() },
-                title = { Text("Why did you miss '${showDialogHabit?.title}' today?") },
-                text = {
-                    TextField(
-                        value = failReasonText,
-                        onValueChange = { failReasonText = it },
-                        placeholder = { Text("Enter reason") }
-                    )
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.saveFailureReason(showDialogHabit!!, failReasonText)
-                        Toast.makeText(context, "Reason saved for weekly summary!", Toast.LENGTH_SHORT).show()
-                        viewModel.clearFailReasonDialog()
-                        failReasonText = ""
-                    }) {
-                        Text("Save")
+    if (showJournalDialog) {
+        AlertDialog(
+            onDismissRequest = { showJournalDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        val today = LocalDate.now().toString()
+                        prefsManager.saveJournalEntry(today, journalText)
+                        showJournalDialog = false
                     }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        viewModel.clearFailReasonDialog()
-                        failReasonText = ""
-                    }) {
-                        Text("Cancel")
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showJournalDialog = false }) { Text("Cancel") }
+            },
+            title = { Text("Journal Entry") },
+            text = {
+                TextField(
+                    value = journalText,
+                    onValueChange = { journalText = it },
+                    placeholder = { Text("Write your thoughts...") }
+                )
+            }
+        )
+    }
+
+    if (showMoodDialog) {
+        AlertDialog(
+            onDismissRequest = { showMoodDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        val today = LocalDate.now().toString()
+                        prefsManager.saveMoodEntry(today, selectedMood)
+                        showMoodDialog = false
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMoodDialog = false }) { Text("Cancel") }
+            },
+            title = { Text("How do you feel today?") },
+            text = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    (1..5).forEach { mood ->
+                        Text(
+                            text = when (mood) {
+                                1 -> "😞"
+                                2 -> "😐"
+                                3 -> "🙂"
+                                4 -> "😃"
+                                5 -> "🤩"
+                                else -> ""
+                            },
+                            fontSize = 28.sp,
+                            modifier = Modifier
+                                .padding(4.dp)
+                                .clickable { selectedMood = mood }
+                        )
                     }
                 }
-            )
-        }
+            }
+        )
     }
 }
-
 @Composable
 fun getSectionColor(section: String): Color = when (section) {
     "Morning Routine" -> Color(0xFFFFF8E1)
@@ -120,9 +198,11 @@ fun getSectionColor(section: String): Color = when (section) {
     "Night Routine" -> Color(0xFFECEFF1)
     else -> MaterialTheme.colorScheme.surface
 }
-
 @Composable
-fun HabitItem(habit: Habit, onToggle: () -> Unit) {
+fun HabitItem(
+    habit: Habit,
+    onToggle: () -> Unit
+) {
     val cardColor = MaterialTheme.colorScheme.surfaceVariant
 
     val streakLabel = when {

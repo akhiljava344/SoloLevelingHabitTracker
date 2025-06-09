@@ -17,27 +17,28 @@ import com.app.sololevelinghabittracker.viewmodel.QuestViewModel
 @Composable
 fun AppNavGraph(
     navController: NavHostController,
+    paddingValues: PaddingValues,
     habitsViewModel: HabitsViewModel,
     questViewModel: QuestViewModel,
-    paddingValues: PaddingValues,
-    AppPreferencesManager : AppPreferencesManager
+    appPreferencesManager: AppPreferencesManager
 ) {
-    NavHost(navController = navController,
+    NavHost(
+        navController = navController,
         startDestination = Screen.Habits.route,
-        modifier = Modifier.padding(paddingValues) ) {
-
+        modifier = Modifier.padding(paddingValues)
+    ) {
         composable(Screen.Habits.route) {
             HabitsScreen(
                 viewModel = habitsViewModel,
-                contentPadding = paddingValues
+                contentPadding = paddingValues,
+                onMatrixClick = { navController.navigate(Screen.Quests.route) } // ✅ Matrix button opens Tasks tab
             )
         }
         composable(Screen.ShadowFocus.route) {
-            PomodoroScreen(appPreferencesManager = AppPreferencesManager) // ✅ CORRECT
+            PomodoroScreen(appPreferencesManager = appPreferencesManager)
         }
         composable(Screen.Quests.route) {
             QuestsScreen(viewModel = questViewModel)
         }
-
     }
 }

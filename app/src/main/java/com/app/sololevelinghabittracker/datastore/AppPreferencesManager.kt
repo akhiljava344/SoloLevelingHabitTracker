@@ -3,12 +3,10 @@ package com.app.sololevelinghabittracker.datastore
 import android.content.Context
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
-import kotlinx.coroutines.flow.first
 
-// Define the DataStore
 private val Context.dataStore by preferencesDataStore(name = "app_preferences")
 
 object AppPrefsKeys {
@@ -16,10 +14,13 @@ object AppPrefsKeys {
     val COMPLETED_SESSIONS = intPreferencesKey("completed_sessions_today")
     val LAST_UPDATED_DATE = stringPreferencesKey("last_updated_date")
 
-    // TODO: Newly Added - For Fail Reason tracking
-    val FAIL_REASON_LIST = stringPreferencesKey("fail_reason_list") // Stores CSV string of reasons
+    val FAIL_REASON_LIST = stringPreferencesKey("fail_reason_list")
     val FAIL_REASON_LAST_UPDATED_DATE = stringPreferencesKey("fail_reason_last_updated_date")
-    val LAST_HABIT_RESET_DATE = stringPreferencesKey("last_habit_reset_date") // ✅ NEW
+    val LAST_HABIT_RESET_DATE = stringPreferencesKey("last_habit_reset_date")
+
+    // ✅ Newly Added - Journal & Mood keys
+    fun journalKey(date: String) = stringPreferencesKey("journal_entry_$date")
+    fun moodKey(date: String) = intPreferencesKey("mood_entry_$date")
 }
 
 class AppPreferencesManager(private val context: Context) {
@@ -37,8 +38,7 @@ class AppPreferencesManager(private val context: Context) {
             .first()
     }
 
-    // ✅ Pomodoro use
-    val completedSessionsToday: Flow<Int> = context.dataStore.data.map { prefs ->
+    val completedSessionsToday = context.dataStore.data.map { prefs ->
         val lastUpdated = prefs[AppPrefsKeys.LAST_UPDATED_DATE]
         val today = LocalDate.now().toString()
         if (lastUpdated != today) 0
@@ -66,7 +66,7 @@ class AppPreferencesManager(private val context: Context) {
     // Save fail reasons list (as comma-separated String)
     suspend fun saveFailReasons(reasons: List<String>) {
         context.dataStore.edit { prefs ->
-            prefs[AppPrefsKeys.FAIL_REASON_LIST] = reasons.joinToString(",") // Save as CSV
+            prefs[AppPrefsKeys.FAIL_REASON_LIST] = reasons.joinToString(",")
             prefs[AppPrefsKeys.FAIL_REASON_LAST_UPDATED_DATE] = LocalDate.now().toString()
         }
     }
@@ -107,4 +107,28 @@ class AppPreferencesManager(private val context: Context) {
         }
     }
 
+    // ✅ Newly Added - Journal & Mood functions
+    suspend fun saveJournalEntry(date: String, text: String) {
+        context.dataStore.edit { prefs ->
+            prefs[AppPrefsKeys.journalKey(date)] = text
+        }
+    }
+
+    suspend fun getJournalEntry(date: String): String {
+        return context.dataStore.data.map { prefs ->
+            prefs[AppPrefsKeys.journalKey(date)] ?: ""
+        }.first()
+    }
+
+    suspend fun saveMoodEntry(date: String, mood: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[AppPrefsKeys.moodKey(date)] = mood
+        }
+    }
+
+    suspend fun getMoodEntry(date: String): Int {
+        return context.dataStore.data.map { prefs ->
+            prefs[AppPrefsKeys.moodKey(date)] ?: 0
+        }.first()
+    }
 }

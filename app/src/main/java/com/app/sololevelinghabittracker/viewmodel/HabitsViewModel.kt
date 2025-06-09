@@ -16,14 +16,12 @@ class HabitsViewModel(
 ) : ViewModel() {
 
     private val today = LocalDate.now().toString()
+    private val _showFailureDialog = MutableStateFlow<Habit?>(null)
+    val showFailureDialog: StateFlow<Habit?> = _showFailureDialog.asStateFlow()
 
     val habits: StateFlow<Map<String, List<Habit>>> = repository.getHabitsForDate(today)
         .map { list -> list.groupBy { it.section } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyMap())
-
-    // State to trigger Failure Reason Dialog in UI
-    private val _showFailReasonDialog = MutableStateFlow<Habit?>(null)
-    val showFailReasonDialog: StateFlow<Habit?> = _showFailReasonDialog.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -45,16 +43,21 @@ class HabitsViewModel(
             Habit(title = "Wake Early", section = "Morning Routine", date = today),
             Habit(title = "Meditate", section = "Morning Routine", date = today),
             Habit(title = "Drink Water", section = "Morning Routine", date = today),
+
             Habit(title = "Plan", section = "Work Routine", date = today),
             Habit(title = "Deep Work", section = "Work Routine", date = today),
             Habit(title = "Take Breaks", section = "Work Routine", date = today),
+
             Habit(title = "2hrs Study", section = "Learning & Habits", date = today),
             Habit(title = "Read", section = "Learning & Habits", date = today),
+
             Habit(title = "Clean Breakfast", section = "Food Log", date = today),
             Habit(title = "Clean Lunch", section = "Food Log", date = today),
             Habit(title = "Clean Dinner", section = "Food Log", date = today),
+
             Habit(title = "<3h Phone", section = "Digital Discipline", date = today),
             Habit(title = "No Social Media", section = "Digital Discipline", date = today),
+
             Habit(title = "Sleep Before 10:30", section = "Night Routine", date = today),
             Habit(title = "Journal", section = "Night Routine", date = today)
         )
@@ -83,14 +86,12 @@ class HabitsViewModel(
                         newLevel += 1
                         newXp -= levelThreshold
                     }
-
                     lastCheckedDate = todayStr
                 }
             } else {
-                // ❌ User unchecked - check for streak break
-                if (habit.lastCheckedDate == yesterdayStr && habit.streak > 0) {
-                    // Trigger Failure Reason Dialog
-                    _showFailReasonDialog.value = habit
+                if (habit.streak > 0) {
+                    // 🔥 Show Failure Dialog if breaking streak
+                    _showFailureDialog.value = habit
                 }
             }
 
@@ -106,18 +107,17 @@ class HabitsViewModel(
         }
     }
 
-    fun clearFailReasonDialog() {
-        _showFailReasonDialog.value = null
+    fun saveFailureReason(reason: String) {
+        viewModelScope.launch {
+            val existing = prefsManager.getFailReasons().toMutableList()
+            existing.add(reason)
+            prefsManager.saveFailReasons(existing)
+        }
+        _showFailureDialog.value = null
     }
 
-    fun saveFailureReason(habit: Habit, reason: String) {
-        viewModelScope.launch {
-            val todayStr = LocalDate.now().toString()
-            val key = "${habit.id}_$todayStr"
-            val existingReasons = prefsManager.getFailReasons().toMutableList()
-            existingReasons.add("Habit: ${habit.title}, Reason: $reason")
-            prefsManager.saveFailReasons(existingReasons)
-        }
+    fun cancelFailureReason() {
+        _showFailureDialog.value = null
     }
 }
 
