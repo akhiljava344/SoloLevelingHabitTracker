@@ -5,54 +5,54 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.navigation.compose.rememberNavController
-import com.app.sololevelinghabittracker.data.local.HabitDatabase
-import com.app.sololevelinghabittracker.data.repository.HabitRepository
-import com.app.sololevelinghabittracker.data.repository.QuestRepository
-import com.app.sololevelinghabittracker.datastore.AppPreferencesManager
-import com.app.sololevelinghabittracker.navigation.AppNavGraph
-import com.app.sololevelinghabittracker.navigation.BottomBar
+import com.app.sololevelinghabittracker.data.HabitDatabase
+import com.app.sololevelinghabittracker.data.HabitRepository
+import com.app.sololevelinghabittracker.datastore.AppPreferencesManager // Import AppPreferencesManager
+import com.app.sololevelinghabittracker.ui.HabitsViewModelFactory
+import com.app.sololevelinghabittracker.ui.screens.HabitsScreen
 import com.app.sololevelinghabittracker.ui.theme.SoloLevelingHabitTrackerTheme
 import com.app.sololevelinghabittracker.viewmodel.HabitsViewModel
-import com.app.sololevelinghabittracker.viewmodel.HabitsViewModelFactory
-import com.app.sololevelinghabittracker.viewmodel.QuestViewModel
-import com.app.sololevelinghabittracker.viewmodel.QuestViewModelFactory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 
 class MainActivity : ComponentActivity() {
+
+    private val applicationScope = CoroutineScope(SupervisorJob()) // Define applicationScope here
+
+    // Lazily initialize AppPreferencesManager and HabitDatabase
+    private val appPreferencesManager: AppPreferencesManager by lazy {
+        AppPreferencesManager(applicationContext)
+    }
+
+    private val database: HabitDatabase by lazy {
+        HabitDatabase.getDatabase(this, applicationScope) // Pass applicationScope here
+    }
+
+    // Lazily initialize HabitRepository
+    private val habitRepository: HabitRepository by lazy {
+        HabitRepository(database.habitDao(), appPreferencesManager) // Pass appPreferencesManager here
+    }
+
+    // Lazily initialize ViewModelFactory and ViewModel
+    private val habitsViewModel: HabitsViewModel by viewModels {
+        HabitsViewModelFactory(habitRepository, appPreferencesManager) // Pass both to factory
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val db = HabitDatabase.getDatabase(applicationContext)
-        val appPreferencesManager = AppPreferencesManager(applicationContext) // ✅ Correct lowercase
-
-        val habitRepository = HabitRepository(db.habitDao())
-        val questRepository = QuestRepository(db.questDao())
-
-        val habitsFactory = HabitsViewModelFactory(habitRepository, appPreferencesManager)
-        val questFactory = QuestViewModelFactory(questRepository)
-
-        val habitsViewModel: HabitsViewModel by viewModels { habitsFactory }
-        val questViewModel: QuestViewModel by viewModels { questFactory }
-
         setContent {
             SoloLevelingHabitTrackerTheme {
-                val navController = rememberNavController()
-
-                Scaffold(
+                // A surface container using the 'background' color from the theme
+                Surface(
                     modifier = Modifier.fillMaxSize(),
-                    bottomBar = {
-                        BottomBar(navController = navController)
-                    }
-                ) { innerPadding ->
-                    AppNavGraph(
-                        navController = navController,
-                        habitsViewModel = habitsViewModel,
-                        questViewModel = questViewModel,
-                        paddingValues = innerPadding,
-                        appPreferencesManager = appPreferencesManager // ✅ fixed lowercase usage here also
-                    )
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    // Pass the ViewModel instance to the Composable screen
+                    HabitsScreen(viewModel = habitsViewModel)
                 }
             }
         }

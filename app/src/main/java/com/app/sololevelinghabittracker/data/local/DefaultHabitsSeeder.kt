@@ -1,9 +1,10 @@
 package com.app.sololevelinghabittracker.data.local
 
 import android.content.Context
+import com.app.sololevelinghabittracker.data.HabitRepository
 import com.app.sololevelinghabittracker.data.local.entity.Habit
-import com.app.sololevelinghabittracker.data.repository.HabitRepository
 import com.app.sololevelinghabittracker.datastore.AppPreferencesManager
+import java.time.LocalDate // Import LocalDate
 
 class DefaultHabitsSeeder(
     private val context: Context,
@@ -32,10 +33,11 @@ class DefaultHabitsSeeder(
     private fun createHabit(title: String, category: String): Habit {
         return Habit(
             title = title,
-            section = category, // ✅ 'section' correct
+            section = category,
             isChecked = false,
-            date = "",
-            streak = 0 // ✅ 'streak' correct property
+//            date = LocalDate.now().toString(), // Pass current date
+            streak = 0,
+            lastCheckedDate = LocalDate.MIN.toString() // Use LocalDate.MIN as default
         )
     }
 
