@@ -16,6 +16,7 @@ firebasePerfKtx = "21.0.5"
 room = "2.6.1"
 kotlin = "1.9.23"
 kotlinCompilerExtension = "1.5.5"
+firebaseCrashlyticsBuildtools = "3.0.4"
 
 
 [libraries]
@@ -42,6 +43,7 @@ firebase-perf-ktx = { group = "com.google.firebase", name = "firebase-perf-ktx",
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+firebase-crashlytics-buildtools = { group = "com.google.firebase", name = "firebase-crashlytics-buildtools", version.ref = "firebaseCrashlyticsBuildtools" }
 
 
 [plugins]

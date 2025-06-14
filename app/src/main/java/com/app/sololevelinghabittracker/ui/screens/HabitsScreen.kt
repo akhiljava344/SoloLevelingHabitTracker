@@ -1,275 +1,187 @@
 package com.app.sololevelinghabittracker.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.app.sololevelinghabittracker.data.local.entity.Habit
+import com.app.sololevelinghabittracker.ui.components.FailureDialog
+import com.app.sololevelinghabittracker.ui.components.LevelUpDialog
 import com.app.sololevelinghabittracker.viewmodel.HabitsViewModel
-import com.app.sololevelinghabittracker.datastore.AppPreferencesManager
-import java.time.LocalDate
-import kotlinx.coroutines.launch
+import com.app.sololevelinghabittracker.viewmodel.HabitWithCompletionStatus // NEW: Import HabitWithCompletionStatus
+import java.time.LocalDate // Required for preview
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HabitsScreen(
-    viewModel: HabitsViewModel,
-    contentPadding: PaddingValues,
-    onMatrixClick: () -> Unit
-) {
-    val habitSections by viewModel.habits.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val prefsManager = remember { AppPreferencesManager(context) }
-    val scope = rememberCoroutineScope()
+fun HabitsScreen(viewModel: HabitsViewModel) {
+    // Collect the new StateFlow for habits with completion status
+    val habitsWithStatus by viewModel.habitsWithStatus.collectAsState()
+    val userXp by viewModel.userXp.collectAsState()
+    val userLevel by viewModel.userLevel.collectAsState()
 
-    var showJournalDialog by remember { mutableStateOf(false) }
-    var showMoodDialog by remember { mutableStateOf(false) }
-    var journalText by remember { mutableStateOf("") }
-    var selectedMood by remember { mutableStateOf(0) }
+    val showLevelUpDialog by viewModel.showLevelUpDialog.collectAsState()
+    val showFailureDialog by viewModel.showFailureDialog.collectAsState()
 
+    // Trigger passive check when the screen is first composed
     LaunchedEffect(Unit) {
-        val lastUpdated = prefsManager.getFailReasonLastUpdatedDate()
-        val today = LocalDate.now().toString()
-        if (lastUpdated != today) {
-            prefsManager.resetFailReasons()
-        }
-        journalText = prefsManager.getJournalEntry(today)
-        selectedMood = prefsManager.getMoodEntry(today)
+        viewModel.checkAndTriggerMissedHabitDialog()
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Today’s Habits", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                title = { Text("Solo Leveling Habit Tracker") },
+                actions = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "XP: $userXp", modifier = Modifier.padding(end = 8.dp))
+                        Text(text = "Level: $userLevel")
+                    }
+                }
             )
-        },
-        bottomBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                Button(
-                    onClick = { showJournalDialog = true },
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("📝 Journal")
-                }
-                Button(
-                    onClick = { showMoodDialog = true },
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("😊 Mood")
-                }
-                Button(
-                    onClick = onMatrixClick,
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("📋 Matrix")
-                }
-            }
         }
-    ) { padding ->
-        if (habitSections.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("No habits for today. Add from Settings.")
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize()
-                    .padding(12.dp)
-            ) {
-                habitSections.forEach { (section, habits) ->
-                    item {
-                        val sectionColor = getSectionColor(section)
-                        Text(
-                            text = section,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(color = sectionColor, shape = RoundedCornerShape(8.dp))
-                                .padding(8.dp)
-                        )
-                    }
-
-                    items(habits, key = { it.id }) { habit ->
-                        HabitItem(habit = habit, onToggle = { viewModel.toggleHabit(habit) })
-                    }
-                }
-            }
-        }
-    }
-
-    if (showJournalDialog) {
-        AlertDialog(
-            onDismissRequest = { showJournalDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    scope.launch {
-                        val today = LocalDate.now().toString()
-                        prefsManager.saveJournalEntry(today, journalText)
-                        showJournalDialog = false
-                    }
-                }) { Text("Save") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showJournalDialog = false }) { Text("Cancel") }
-            },
-            title = { Text("Journal Entry") },
-            text = {
-                TextField(
-                    value = journalText,
-                    onValueChange = { journalText = it },
-                    placeholder = { Text("Write your thoughts...") }
-                )
-            }
-        )
-    }
-
-    if (showMoodDialog) {
-        AlertDialog(
-            onDismissRequest = { showMoodDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    scope.launch {
-                        val today = LocalDate.now().toString()
-                        prefsManager.saveMoodEntry(today, selectedMood)
-                        showMoodDialog = false
-                    }
-                }) { Text("Save") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showMoodDialog = false }) { Text("Cancel") }
-            },
-            title = { Text("How do you feel today?") },
-            text = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
+            if (habitsWithStatus.isEmpty()) {
+                Text("No habits yet! Add some to start leveling up.", modifier = Modifier.align(Alignment.CenterHorizontally))
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    (1..5).forEach { mood ->
-                        Text(
-                            text = when (mood) {
-                                1 -> "😞"
-                                2 -> "😐"
-                                3 -> "🙂"
-                                4 -> "😃"
-                                5 -> "🤩"
-                                else -> ""
-                            },
-                            fontSize = 28.sp,
-                            modifier = Modifier
-                                .padding(4.dp)
-                                .clickable { selectedMood = mood }
+                    items(habitsWithStatus) { habitWithStatus ->
+                        HabitItem(
+                            habitWithStatus = habitWithStatus,
+                            onToggle = { habit -> viewModel.toggleHabit(habit) }
+                            // Add other actions like onEdit, onDelete here if you have them
                         )
                     }
                 }
             }
-        )
+        }
+
+        // Level Up Dialog
+        showLevelUpDialog?.let { newLevel ->
+            LevelUpDialog(
+                newLevel = newLevel,
+                onDismiss = { viewModel.dismissLevelUpDialog() }
+            )
+        }
+
+        // Failure Dialog
+        showFailureDialog?.let { habit ->
+            FailureDialog(
+                habitTitle = habit.title,
+                onDismiss = { viewModel.dismissFailureDialog() }
+            )
+        }
     }
 }
-@Composable
-fun getSectionColor(section: String): Color = when (section) {
-    "Morning Routine" -> Color(0xFFFFF8E1)
-    "Work Routine" -> Color(0xFFE3F2FD)
-    "Learning & Habits" -> Color(0xFFF3E5F5)
-    "Food Log" -> Color(0xFFFFF3E0)
-    "Digital Discipline" -> Color(0xFFFFEBEE)
-    "Night Routine" -> Color(0xFFECEFF1)
-    else -> MaterialTheme.colorScheme.surface
-}
+
 @Composable
 fun HabitItem(
-    habit: Habit,
-    onToggle: () -> Unit
+    habitWithCompletionStatus: HabitWithCompletionStatus,
+    onToggle: (Habit) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val cardColor = MaterialTheme.colorScheme.surfaceVariant
-
-    val streakLabel = when {
-        habit.streak >= 7 -> "💯 ${habit.streak} Days Master!"
-        habit.streak >= 3 -> "🔥 ${habit.streak} Days Streak"
-        habit.streak == 2 -> "🟢 2 Days Started"
-        habit.streak == 1 -> "🟢 1 Day Started"
-        else -> "❄️ No Streak"
-    }
-
-    val xpFraction = habit.xp / (habit.level * 100f)
-    val levelText = "Level ${habit.level} • ${habit.xp}/${habit.level * 100} XP"
+    val habit = habitWithCompletionStatus.habit
+    val isCompletedToday = habitWithCompletionStatus.isCompletedToday
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = cardColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            .clickable { onToggle(habit) } // Pass the original Habit object for toggling
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = habit.isChecked, onCheckedChange = { onToggle() })
-
-                Spacer(modifier = Modifier.width(8.dp))
-
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = habit.title,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    modifier = Modifier.weight(1f)
+                    style = MaterialTheme.typography.titleMedium
                 )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Section: ${habit.section} | Streak: ${habit.streak} | XP: ${habit.xp} | Level: ${habit.level}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Checkbox(
+                checked = isCompletedToday,
+                onCheckedChange = { /* Handled by clickable modifier on the Card */ }
+            )
+        }
+    }
+}
 
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 8.dp)
-                ) {
-                    Text(
-                        text = streakLabel,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimary
+@Preview(showBackground = true)
+@Composable
+fun HabitsScreenPreview() {
+    // This preview will not show dynamic data but helps visualize the layout
+    val sampleHabits = remember {
+        listOf(
+            HabitWithCompletionStatus(
+                habit = Habit(id = 1, title = "Meditate", section = "Mind", streak = 5, xp = 120, level = 3),
+                isCompletedToday = true,
+                xpAwardedToday = true
+            ),
+            HabitWithCompletionStatus(
+                habit = Habit(id = 2, title = "Workout", section = "Body", streak = 0, xp = 0, level = 1),
+                isCompletedToday = false,
+                xpAwardedToday = false
+            ),
+            HabitWithCompletionStatus(
+                habit = Habit(id = 3, title = "Read Book", section = "Knowledge", streak = 10, xp = 250, level = 4),
+                isCompletedToday = false,
+                xpAwardedToday = false
+            )
+        )
+    }
+
+    // You'd need a mock ViewModel or just static content for a true preview
+    // For simplicity, just showing the layout structure.
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Solo Leveling Habit Tracker") },
+                actions = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "XP: 150", modifier = Modifier.padding(end = 8.dp))
+                        Text(text = "Level: 2")
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(sampleHabits) { habitWithStatus ->
+                    HabitItem(
+                        habitWithStatus = habitWithStatus,
+                        onToggle = { /* No-op for preview */ }
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            LinearProgressIndicator(
-                progress = xpFraction.coerceIn(0f, 1f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-
-            Text(
-                text = levelText,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
-            )
         }
     }
 }
