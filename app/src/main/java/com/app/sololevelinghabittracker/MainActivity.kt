@@ -3,17 +3,13 @@ package com.app.sololevelinghabittracker
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.viewModels
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Scaffold
-import androidx.compose.ui.Modifier
-import androidx.navigation.compose.rememberNavController
-import com.app.sololevelinghabittracker.data.local.HabitDatabase
-import com.app.sololevelinghabittracker.data.repository.HabitRepository
+import androidx.lifecycle.ViewModelProvider
+import com.app.sololevelinghabittracker.data.database.HabitDatabase
+import com.app.sololevelinghabittracker.data.local.QuestDatabase
 import com.app.sololevelinghabittracker.data.repository.QuestRepository
 import com.app.sololevelinghabittracker.datastore.AppPreferencesManager
-import com.app.sololevelinghabittracker.navigation.AppNavGraph
-import com.app.sololevelinghabittracker.navigation.BottomBar
+import com.app.sololevelinghabittracker.navigation.AppNavigation
+import com.app.sololevelinghabittracker.repository.HabitRepository
 import com.app.sololevelinghabittracker.ui.theme.SoloLevelingHabitTrackerTheme
 import com.app.sololevelinghabittracker.viewmodel.HabitsViewModel
 import com.app.sololevelinghabittracker.viewmodel.HabitsViewModelFactory
@@ -24,36 +20,33 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val db = HabitDatabase.getDatabase(applicationContext)
-        val appPreferencesManager = AppPreferencesManager(applicationContext) // ✅ Correct lowercase
+        val appPreferencesManager = AppPreferencesManager(applicationContext)
 
-        val habitRepository = HabitRepository(db.habitDao())
-        val questRepository = QuestRepository(db.questDao())
+        // ✅ Room Database and Repositories
+        val habitsDao = HabitDatabase.getDatabase(applicationContext).habitDao()
+        val habitsRepository = HabitRepository(habitsDao)
 
-        val habitsFactory = HabitsViewModelFactory(habitRepository, appPreferencesManager)
-        val questFactory = QuestViewModelFactory(questRepository)
+        val questDao = QuestDatabase.getDatabase(applicationContext).questDao()
+        val questRepository = QuestRepository(questDao)
 
-        val habitsViewModel: HabitsViewModel by viewModels { habitsFactory }
-        val questViewModel: QuestViewModel by viewModels { questFactory }
+        // ✅ ViewModels with correct Repositories
+        val habitsViewModel = ViewModelProvider(
+            this,
+            HabitsViewModelFactory(habitsRepository)
+        )[HabitsViewModel::class.java]
+
+        val questViewModel = ViewModelProvider(
+            this,
+            QuestViewModelFactory(questRepository)
+        )[QuestViewModel::class.java]
 
         setContent {
             SoloLevelingHabitTrackerTheme {
-                val navController = rememberNavController()
-
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    bottomBar = {
-                        BottomBar(navController = navController)
-                    }
-                ) { innerPadding ->
-                    AppNavGraph(
-                        navController = navController,
-                        habitsViewModel = habitsViewModel,
-                        questViewModel = questViewModel,
-                        paddingValues = innerPadding,
-                        appPreferencesManager = appPreferencesManager // ✅ fixed lowercase usage here also
-                    )
-                }
+                AppNavigation(
+                    habitsViewModel = habitsViewModel,
+                    questViewModel = questViewModel,
+                    appPreferencesManager = appPreferencesManager
+                )
             }
         }
     }

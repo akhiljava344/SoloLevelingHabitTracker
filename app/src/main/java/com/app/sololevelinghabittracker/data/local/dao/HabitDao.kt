@@ -1,7 +1,7 @@
-package com.app.sololevelinghabittracker.data.local.dao
+package com.app.sololevelinghabittracker.data.dao
 
 import androidx.room.*
-import com.app.sololevelinghabittracker.data.local.entity.Habit
+import com.app.sololevelinghabittracker.data.entity.Habit
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -19,18 +19,6 @@ interface HabitDao {
     @Delete
     suspend fun deleteHabit(habit: Habit)
 
-    @Query("SELECT * FROM habits WHERE date = :date")
-    fun getHabitsForDate(date: String): Flow<List<Habit>>
-
-    @Query("UPDATE habits SET isChecked = 0")
-    suspend fun resetAllHabitsChecked()
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertHabits(habits: List<Habit>)
-
-    @Query("SELECT * FROM habits WHERE date = :date")
-    suspend fun getHabitsForDateOnce(date: String): List<Habit>
-
-
+    @Query("SELECT * FROM habits WHERE id = :habitId LIMIT 1")
+    suspend fun getHabitById(habitId: Int): Habit?
 }
-

@@ -4,13 +4,20 @@ import android.content.Context
 import android.media.MediaPlayer
 import android.os.VibrationEffect
 import android.os.Vibrator
-import android.provider.Settings
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -18,165 +25,120 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.app.sololevelinghabittracker.datastore.AppPreferencesManager
-import com.app.sololevelinghabittracker.viewmodel.ShadowFocusViewModel
-import com.app.sololevelinghabittracker.viewmodel.ShadowFocusViewModelFactory
-import kotlin.math.min
+import kotlinx.coroutines.delay
+import java.time.LocalDate
+import java.time.LocalTime
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun PomodoroScreen(appPreferencesManager : AppPreferencesManager) {
-    val viewModel: ShadowFocusViewModel = viewModel(
-        factory = ShadowFocusViewModelFactory(appPreferencesManager)
-    )
-    val timeText by viewModel.timeText.collectAsState()
-    val progress by viewModel.progress.collectAsState()
-    val isRunning by viewModel.isRunning.collectAsState()
-    val xpEarned by viewModel.xpEarned.collectAsState()
-    val sessionsCompletedToday by viewModel.sessionsCompletedToday.collectAsState()
-
-    var isShieldMode by remember { mutableStateOf(false) }
-    var isSoundOn by remember { mutableStateOf(false) }
-    var showSessionComplete by remember { mutableStateOf(false) }
-
+fun PomodoroScreen() {
     val context = LocalContext.current
-    val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-    var mediaPlayer: MediaPlayer? = remember { null }
+    val totalTime = 25 * 60 // 25 minutes
+    var remainingTime by remember { mutableStateOf(totalTime) }
+    var isRunning by remember { mutableStateOf(false) }
+    var streakCount by remember { mutableStateOf(0) }
+    var lastStreakDate by remember { mutableStateOf(LocalDate.now().toString()) }
 
-    // 🎉 Feedback when XP is awarded (session complete)
-    LaunchedEffect(xpEarned) {
-        if (xpEarned > 0) {
-            showSessionComplete = true
+    // Reset streak if date changed (at midnight)
+    if (lastStreakDate != LocalDate.now().toString()) {
+        streakCount = 0
+        lastStreakDate = LocalDate.now().toString()
+    }
 
-            if (isSoundOn) {
-                mediaPlayer = MediaPlayer.create(context, Settings.System.DEFAULT_NOTIFICATION_URI)
-                mediaPlayer?.start()
-            } else {
-                vibrator.vibrate(VibrationEffect.createOneShot(400, VibrationEffect.DEFAULT_AMPLITUDE))
-            }
+    // Timer effect
+    LaunchedEffect(isRunning, remainingTime) {
+        if (isRunning && remainingTime > 0) {
+            delay(1000)
+            remainingTime -= 1
+        } else if (isRunning && remainingTime == 0) {
+            isRunning = false
+            streakCount += 1
+            triggerFeedback(context)
+            remainingTime = totalTime
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("Shadow Focus Mode") })
+    // Timer UI
+    val progress = 1f - (remainingTime / totalTime.toFloat())
+    val animatedProgress by animateFloatAsState(targetValue = progress, label = "ProgressAnim")
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Circular Ring Timer
+        Box(contentAlignment = Alignment.Center) {
+            Canvas(modifier = Modifier.size(240.dp)) {
+                drawArc(
+                    color = Color.LightGray,
+                    startAngle = -90f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    style = Stroke(18f, cap = StrokeCap.Round)
+                )
+                drawArc(
+                    color = Color(0xFF6C63FF),
+                    startAngle = -90f,
+                    sweepAngle = 360f * animatedProgress,
+                    useCenter = false,
+                    style = Stroke(18f, cap = StrokeCap.Round)
+                )
+            }
+            Text(
+                text = formatTime(remainingTime),
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
-    ) { padding ->
-        Column(
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Start / Pause Button
+        Button(
+            onClick = { isRunning = !isRunning },
             modifier = Modifier
-                .padding(padding)
-                .padding(24.dp)
-                .fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.CenterHorizontally
+                .clip(CircleShape)
+                .size(100.dp)
         ) {
-
-            TimerRing(progress = progress, timeText = timeText)
-
-            if (showSessionComplete) {
-                Text(
-                    text = "🎉 Session Complete! +$xpEarned XP",
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                Button(onClick = {
-                    if (isRunning) viewModel.pauseTimer()
-                    else viewModel.startTimer(isShieldMode)
-                }) {
-                    Text(if (isRunning) "Pause" else "Start")
-                }
-
-                OutlinedButton(onClick = {
-                    viewModel.resetTimer()
-                    showSessionComplete = false
-                }) {
-                    Text("Reset")
-                }
-            }
-
-            // ⚙️ Settings Toggles
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Shield Mode (XP Boost)", fontWeight = FontWeight.Bold)
-                    Switch(checked = isShieldMode, onCheckedChange = { isShieldMode = it })
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Ambient Sound", fontWeight = FontWeight.Bold)
-                    Switch(checked = isSoundOn, onCheckedChange = { isSoundOn = it })
-                }
-            }
-
-            // 🌟 XP + Session Info
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text("XP on Complete: ${if (isShieldMode) 20 else 10}", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                LinearProgressIndicator(
-                    progress = progress,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp),
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text("🔥 Sessions Today: $sessionsCompletedToday", fontSize = 13.sp, modifier = Modifier.align(Alignment.End))
-            }
+            Text(if (isRunning) "Pause" else "Start", fontSize = 18.sp)
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(text = "🔥 Pomodoro Streak Today: $streakCount")
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Long-press to reset",
+            modifier = Modifier
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = {
+                        isRunning = false
+                        remainingTime = totalTime
+                        streakCount = 0
+                    }
+                )
+                .padding(8.dp),
+            color = Color.Gray
+        )
     }
 }
 
-@Composable
-fun TimerRing(progress: Float, timeText: String) {
-    val strokeWidth = 18f
-    val ringColor = MaterialTheme.colorScheme.primary
+private fun formatTime(seconds: Int): String {
+    val min = seconds / 60
+    val sec = seconds % 60
+    return String.format("%02d:%02d", min, sec)
+}
 
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(220.dp)
-            .padding(16.dp)
-    ) {
-        Canvas(modifier = Modifier.size(200.dp)) {
-            val diameter = min(size.width, size.height)
-            val radius = diameter / 2
+private fun triggerFeedback(context: Context) {
+    val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+    vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
 
-            drawCircle(
-                color = Color.LightGray,
-                radius = radius,
-                style = Stroke(width = strokeWidth)
-            )
-
-            drawArc(
-                color = ringColor,
-                startAngle = -90f,
-                sweepAngle = 360 * progress,
-                useCenter = false,
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-            )
-        }
-
-        Text(
-            text = timeText,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
+    val mediaPlayer = MediaPlayer.create(context, android.provider.Settings.System.DEFAULT_NOTIFICATION_URI)
+    mediaPlayer.start()
 }

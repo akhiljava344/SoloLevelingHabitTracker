@@ -1,4 +1,4 @@
-package com.app.sololevelinghabittracker.data.local.entity
+package com.app.sololevelinghabittracker.data.entity
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -7,12 +7,11 @@ import androidx.room.PrimaryKey
 data class Habit(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val title: String,
-    val section: String,
-    val date: String,
-    val isChecked: Boolean = false,
+    val category: String, // e.g., "Morning", "Health"
+    val color: String,    // hex color for UI
+    val checked: Boolean = false,
     val streak: Int = 0,
-    val lastCheckedDate: String = "",
     val xp: Int = 0,
-    val level: Int = 1
+    val skipToday: Boolean = false,
+    val lastCheckedDate: String = ""
 )
-

@@ -2,6 +2,11 @@ package com.app.sololevelinghabittracker.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+val Navy = Color(0xFF001F3F)
+val LightBlue = Color(0xFF1E90FF)
+val White = Color(0xFFFFFFFF)
+val Black = Color(0xFF000000)
+
 val Purple80 = Color(0xFFD0BCFF)
 val PurpleGrey80 = Color(0xFFCCC2DC)
 val Pink80 = Color(0xFFEFB8C8)

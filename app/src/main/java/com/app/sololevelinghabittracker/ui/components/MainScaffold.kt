@@ -16,7 +16,7 @@ fun BottomBarNavigation(
     onNavigate: (String) -> Unit
 ) {
     NavigationBar {
-        listOf(Screen.Habits, Screen.ShadowFocus).forEach { screen ->
+        listOf(Screen.Habits, Screen.Focus).forEach { screen ->
             NavigationBarItem(
                 selected = currentRoute == screen.route,
                 onClick = { onNavigate(screen.route) },
